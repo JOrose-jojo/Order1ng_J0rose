@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>煎饼侠 - 商家订单管理</title>
+    <style>
+        :root {
+            --primary: #FF7E36;
+            --primary-dark: #E6621F;
+            --bg: #F7F7F7;
+            --card: #FFFFFF;
+            --text: #333333;
+            --text-light: #888888;
+            --border: #EEEEEE;
+            --danger: #FF5252;
+            --shadow: 0 2px 12px rgba(0,0,0,0.08);
+            --radius: 12px;
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg); color: var(--text); max-width: 500px; margin: 0 auto; min-height: 100vh; -webkit-font-smoothing: antialiased;
+        }
+        .navbar {
+            position: sticky; top: 0; z-index: 100; background: var(--primary); color: white; padding: 15px 16px;
+            display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(255,126,54,0.3);
+        }
+        .navbar h1 { font-size: 18px; font-weight: 700; }
+        .login-box {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; background: white; margin: 20px; border-radius: var(--radius); box-shadow: var(--shadow);
+        }
+        .login-box h2 { font-size: 20px; margin-bottom: 8px; }
+        .login-box p { color: var(--text-light); font-size: 14px; margin-bottom: 20px; }
+        .login-box input {
+            width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; margin-bottom: 12px; text-align: center;
+        }
+        .login-box button {
+            width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer;
+        }
+        .orders-container { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+        .order-card { background: var(--card); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+        .order-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .order-id { font-weight: 700; font-size: 15px; }
+        .order-status { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .order-status.pending { background: #FFF8E1; color: #F57F17; }
+        .order-status.completed { background: #E8F5E9; color: #2E7D32; }
+        .order-items { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 10px 0; margin-bottom: 10px; }
+        .order-item-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+        .order-item-row .oi-name { color: var(--text); }
+        .order-item-row .oi-qty { color: var(--text-light); margin: 0 8px; }
+        .order-item-row .oi-price { font-weight: 500; }
+        .order-total { text-align: right; font-weight: 700; font-size: 16px; color: var(--primary); margin-bottom: 10px; }
+        .order-total::before { content: '合计：¥'; font-size: 13px; }
+        .order-customer { font-size: 13px; color: var(--text-light); line-height: 1.6; }
+        .order-actions { margin-top: 12px; display: flex; gap: 8px; }
+        .order-action-btn { flex: 1; padding: 10px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .order-action-btn.complete { background: #E8F5E9; color: #2E7D32; border: 1px solid #A5D6A7; }
+        .order-action-btn.complete:active { background: #C8E6C9; }
+        .order-action-btn.delete { background: #FFF3F3; color: #C62828; border: 1px solid #FFCDD2; }
+        .order-action-btn.delete:active { background: #FFEBEE; }
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--text-light); }
+        .empty-state .empty-emoji { font-size: 56px; margin-bottom: 12px; }
+        .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 16px 24px; border-radius: 10px; font-size: 15px; z-index: 300; display: none; text-align: center; max-width: 80%; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>🥞 商家订单管理</h1>
+        <a href="./煎饼侠-点餐.html" style="position:absolute;right:16px;color:white;font-size:13px;text-decoration:none;">顾客端</a>
+    </div>
+
+    <!-- 密码验证 -->
+    <div id="loginBox" class="login-box">
+        <h2>🔒 商家登录</h2>
+        <p>演示密码：<strong>8888</strong></p>
+        <input type="password" id="passwordInput" placeholder="请输入商家密码" onkeydown="if(event.key==='Enter') checkPassword()">
+        <button onclick="checkPassword()">进入商家端</button>
+    </div>
+
+    <!-- 订单列表 -->
+    <div id="ordersView" style="display:none;">
+        <div class="orders-container" id="ordersContainer"></div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const MERCHANT_PASSWORD = '8888';
+        let isLoggedIn = false;
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => { toast.style.display = 'none'; }, 2000);
+        }
+
+        function checkPassword() {
+            const input = document.getElementById('passwordInput').value;
+            if (input === MERCHANT_PASSWORD) {
+                isLoggedIn = true;
+                document.getElementById('loginBox').style.display = 'none';
+                document.getElementById('ordersView').style.display = 'block';
+                renderOrders();
+                showToast('✅ 登录成功');
+            } else {
+                showToast('❌ 密码错误');
+            }
+        }
+
+        function getAllOrders() {
+            return JSON.parse(localStorage.getItem('jb_orders') || '[]');
+        }
+
+        function saveAllOrders(orders) {
+            localStorage.setItem('jb_orders', JSON.stringify(orders));
+        }
+
+        // 顾客端在另一个标签页下单后，商家端自动刷新订单列表。
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'jb_orders' && isLoggedIn) renderOrders();
+        });
+
+        function renderOrders() {
+            if (!isLoggedIn) return;
+            const container = document.getElementById('ordersContainer');
+            const orders = getAllOrders();
+            if (orders.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="empty-emoji">📋</div><p>暂无订单</p><p style="font-size:13px;margin-top:4px;">顾客下单后会显示在这里</p></div>`;
+                return;
+            }
+            container.innerHTML = '';
+            orders.forEach((order, index) => {
+                const card = document.createElement('div');
+                card.className = 'order-card';
+                const itemsHtml = order.items.map(item => `
+                    <div class="order-item-row">
+                        <span class="oi-name">${item.name}</span>
+                        <span class="oi-qty">x${item.qty}</span>
+                        <span class="oi-price">¥${(item.price * item.qty).toFixed(2)}</span>
+                    </div>
+                `).join('');
+                card.innerHTML = `
+                    <div class="order-header">
+                        <span class="order-id">#${order.id}</span>
+                        <span class="order-status ${order.status}">${order.status === 'pending' ? '待配送' : '已完成'}</span>
+                    </div>
+                    <div class="order-items">${itemsHtml}</div>
+                    <div class="order-total">${order.total.toFixed(2)}</div>
+                    <div class="order-customer">
+                        🕐 ${order.createTime}<br>
+                        👤 ${order.customer.name} &nbsp; 📞 ${order.customer.phone}<br>
+                        📍 ${order.customer.address}${order.customer.note ? ' &nbsp; 📝 ' + order.customer.note : ''}
+                    </div>
+                    <div class="order-actions">
+                        ${order.status === 'pending' ? `<button class="order-action-btn complete" onclick="completeOrder(${index})">标记完成</button>` : ''}
+                        <button class="order-action-btn delete" onclick="deleteOrder(${index})">删除订单</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function completeOrder(index) {
+            const orders = getAllOrders();
+            if (orders[index]) {
+                orders[index].status = 'completed';
+                saveAllOrders(orders);
+                renderOrders();
+                showToast('✅ 已标记为完成');
+            }
+        }
+
+        function deleteOrder(index) {
+            if (confirm('确认删除该订单？')) {
+                const orders = getAllOrders();
+                orders.splice(index, 1);
+                saveAllOrders(orders);
+                renderOrders();
+                showToast('🗑️ 订单已删除');
+            }
+        }
+    </script>
+</body>
+</html>
